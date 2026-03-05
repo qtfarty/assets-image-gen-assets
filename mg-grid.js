@@ -206,10 +206,25 @@
     if (!bgEl || !gridEl) return;
 
     var sourceUrl = bgEl.getAttribute('data-mg-source');
-    var defaultBg = bgEl.style.background || null;
+
+    // Priority 1: Check if colors were pre-set by the backend (n8n / colormind)
+    // These come from template variables: style="background:{{ bg_color }}" and data-mg-grid-color="{{ grid_color }}"
+    var presetBg = bgEl.style.background || null;
+    var presetGrid = bgEl.getAttribute('data-mg-grid-color') || null;
+
+    // A color is "real" if it looks like a hex value or rgb() — not empty, not a mustache placeholder
+    function isRealColor(c) {
+        if (!c) return false;
+        c = c.trim();
+        // Hex: #fff, #ffffff, #ffffffff
+        if (/^#[0-9a-fA-F]{3,8}$/.test(c)) return true;
+        // rgb(r, g, b) — browsers auto-convert inline hex to this
+        if (/^rgb\(\s*\d+/.test(c)) return true;
+        return false;
+    }
 
     function applyGrid(colors) {
-        var bgColor = colors && colors.bg ? colors.bg : defaultBg;
+        var bgColor = colors && colors.bg ? colors.bg : presetBg;
         var gridColor = colors && colors.grid ? colors.grid : '#ffffff';
 
         if (bgColor) bgEl.style.background = bgColor;
@@ -223,7 +238,6 @@
             var url = RETRO_GRIDS[idx - GENERATORS.length];
 
             // We must fetch the SVG text so we can inject {{ grid_color }} inline.
-            // We cannot use an <img> tag for dynamic color replacements.
             fetch(url)
                 .then(function (response) { return response.text(); })
                 .then(function (svgText) {
@@ -235,9 +249,16 @@
         }
     }
 
-    if (sourceUrl && !/^data:/.test(sourceUrl)) {
+    // If both bg and grid colors are already set (from n8n/colormind), use them directly
+    if (isRealColor(presetBg) && isRealColor(presetGrid)) {
+        applyGrid({ bg: presetBg.trim(), grid: presetGrid.trim() });
+    }
+    // Otherwise, try to extract from the source image
+    else if (sourceUrl && !/^data:/.test(sourceUrl)) {
         extractColor(sourceUrl, function (colors) { applyGrid(colors); });
-    } else {
+    }
+    // Last resort: use defaults
+    else {
         applyGrid(null);
     }
 })();
