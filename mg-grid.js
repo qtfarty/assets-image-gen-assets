@@ -208,16 +208,50 @@
 
     // ========= Main =========
 
-    var bgEl = document.getElementById('mg-bg');
-    var gridEl = document.getElementById('mg-grid');
-    if (!bgEl || !gridEl) return;
+    function initMarkupGoScript() {
+        var bgEl = document.getElementById('mg-bg');
+        var gridEl = document.getElementById('mg-grid');
+        
+        // ========= Auto-size Text =========
+        // Do this before returning even if bgEl is missing, just in case
+        var resizeEls = document.querySelectorAll('[data-mg-autosize="true"]');
+        for (var i = 0; i < resizeEls.length; i++) {
+            var el = resizeEls[i];
+            var text = el.innerText || el.textContent || '';
+            var len = text.length;
+            var maxFont = parseInt(el.getAttribute('data-mg-max-font'), 10) || 80;
+            var minFont = parseInt(el.getAttribute('data-mg-min-font'), 10) || 40;
+            var threshold = parseInt(el.getAttribute('data-mg-threshold'), 10) || 50;
+            var step = parseFloat(el.getAttribute('data-mg-step')) || 0.3;
 
-    var sourceUrl = bgEl.getAttribute('data-mg-source');
+            if (len >= threshold) {
+                var newSize = Math.max(minFont, Math.round(maxFont - ((len - threshold) * step)));
+                el.style.fontSize = newSize + 'px';
+            }
+        }
 
-    // Priority 1: Check if colors were pre-set by the backend (n8n / colormind)
-    // These come from template variables: style="background:{{ bg_color }}" and data-mg-grid-color="__MG_GRID_COLOR__"
-    var presetBg = bgEl.style.background || null;
-    var presetGrid = bgEl.getAttribute('data-mg-grid-color') || null;
+        if (!bgEl || !gridEl) return;
+
+        var sourceUrl = bgEl.getAttribute('data-mg-source');
+
+        // Priority 1: Check if colors were pre-set by the backend (n8n / colormind)
+        // These come from template variables: style="background:{{ bg_color }}" and data-mg-grid-color="__MG_GRID_COLOR__"
+        var presetBg = bgEl.style.background || null;
+        var presetGrid = bgEl.getAttribute('data-mg-grid-color') || null;
+
+        // If both bg and grid colors are already set (from n8n/colormind), use them directly
+        if (isRealColor(presetBg) && isRealColor(presetGrid)) {
+            applyGrid({ bg: presetBg.trim(), grid: presetGrid.trim() }, bgEl, gridEl);
+        }
+        // Otherwise, try to extract from the source image
+        else if (sourceUrl && !/^data:/.test(sourceUrl)) {
+            extractColor(sourceUrl, function (colors) { applyGrid(colors, bgEl, gridEl); });
+        }
+        // Last resort: use defaults
+        else {
+            applyGrid(null, bgEl, gridEl);
+        }
+    }
 
     // A color is "real" if it looks like a hex value or rgb() — not empty, not a mustache placeholder
     function isRealColor(c) {
@@ -230,8 +264,8 @@
         return false;
     }
 
-    function applyGrid(colors) {
-        var bgColor = colors && colors.bg ? colors.bg : presetBg;
+    function applyGrid(colors, bgEl, gridEl) {
+        var bgColor = colors && colors.bg ? colors.bg : (bgEl.style.background || null);
         var gridColor = colors && colors.grid ? colors.grid : '#ffffff';
 
         if (bgColor) bgEl.style.background = bgColor;
@@ -247,35 +281,18 @@
         }
     }
 
-    // If both bg and grid colors are already set (from n8n/colormind), use them directly
-    if (isRealColor(presetBg) && isRealColor(presetGrid)) {
-        applyGrid({ bg: presetBg.trim(), grid: presetGrid.trim() });
-    }
-    // Otherwise, try to extract from the source image
-    else if (sourceUrl && !/^data:/.test(sourceUrl)) {
-        extractColor(sourceUrl, function (colors) { applyGrid(colors); });
-    }
-    // Last resort: use defaults
-    else {
-        applyGrid(null);
+    // Ensure DOM is fully loaded before executing (avoids issues if script injected in <head>)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMarkupGoScript);
+    } else {
+        initMarkupGoScript();
     }
 
-    // ========= Auto-size Text =========
-    // In MarkupGo, text is injected via Handlebars after render, but the original font size
-    // is hardcoded in the HTML. This dynamically shrinks it based on length.
-    var resizeEls = document.querySelectorAll('[data-mg-autosize="true"]');
-    for (var i = 0; i < resizeEls.length; i++) {
-        var el = resizeEls[i];
-        var text = el.innerText || el.textContent || '';
-        var len = text.length;
-        var maxFont = parseInt(el.getAttribute('data-mg-max-font'), 10) || 80;
-        var minFont = parseInt(el.getAttribute('data-mg-min-font'), 10) || 40;
-        var threshold = parseInt(el.getAttribute('data-mg-threshold'), 10) || 50;
-        var step = parseFloat(el.getAttribute('data-mg-step')) || 0.3;
-
-        if (len >= threshold) {
-            var newSize = Math.max(minFont, Math.round(maxFont - ((len - threshold) * step)));
-            el.style.fontSize = newSize + 'px';
+    // Fallback for some environments where DOMContentLoaded fires oddly
+    window.addEventListener('load', function() {
+        if (document.querySelectorAll('.mg-grid svg').length === 0) {
+            initMarkupGoScript();
         }
-    }
+    });
+
 })();
