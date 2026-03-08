@@ -237,7 +237,7 @@
         var sourceUrl = bgEl.getAttribute('data-mg-source');
 
         // Priority 1: Check if colors were pre-set by the backend (n8n / colormind)
-        // These come from template variables: style="background:{{ bg_color }}" and data-mg-grid-color="__MG_GRID_COLOR__"
+        // These come from template variables: style="background:{{ primary_colour }}" and data-mg-grid-color="__MG_GRID_COLOR__"
         var presetBg = bgEl.style.background || null;
         var presetGrid = bgEl.getAttribute('data-mg-grid-color') || null;
 
